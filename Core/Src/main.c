@@ -18,6 +18,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stm32f3xx_hal_tim.h"
+#include <stdint.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -31,7 +33,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define NUM_OF_MOTOR 4 // Number of motors to control
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,7 +50,13 @@ TIM_HandleTypeDef htim1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+static uint16_t adc_values[NUM_OF_MOTOR]; // Array to store ADC values for variable resistors
 
+typedef struct {
+  uint8_t button = 0; // 0: not pressed, 1: pressed
+  uint16_t pwm_value = 0; // PWM value for motor speed control (0-1000 for TIM1 with period 1000)
+} moter;
+moter motors[NUM_OF_MOTOR]; // Array to store button states and PWM values for 4 motors
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -101,6 +109,8 @@ int main(void)
   MX_ADC2_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_ALL);
+  HAL_ADC_Start_DMA(&hadc2, (uint32_t*)adc_values, NUM_OF_MOTOR); // Start ADC in DMA mode to read variable resistors
 
   /* USER CODE END 2 */
 
@@ -109,7 +119,16 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    for(int i = 0; i < NUM_OF_MOTOR; i++) {
+      // Read button state (active low)
+      motors[i].button = (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0 << i) == GPIO_PIN_RESET) ? 1 : 0;
 
+      // Map ADC value (0-4095) to PWM value (0-1000)
+      motors[i].pwm_value = (adc_values[i] * 1000) / 4095;
+
+      // If button is pressed, set PWM to the mapped value, otherwise set it to 0
+      __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1 << i, motors[i].button ? motors[i].pwm_value : 0);
+    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
